@@ -1,0 +1,10 @@
+C:\Users\iuuni\Desktop\IME_Placeholder\obj\Debug\IME_Placeholder.csprojAssemblyReference.cache
+C:\Users\iuuni\Desktop\IME_Placeholder\obj\Debug\IME_Placeholder.csproj.CoreCompileInputs.cache
+C:\Users\iuuni\Desktop\IME_Placeholder\bin\Debug\IME_Placeholder.dll
+C:\Users\iuuni\Desktop\IME_Placeholder\bin\Debug\IME_Placeholder.pdb
+C:\Users\iuuni\Desktop\IME_Placeholder\bin\Debug\KeePass.exe
+C:\Users\iuuni\Desktop\IME_Placeholder\bin\Debug\KeePass.exe.config
+C:\Users\iuuni\Desktop\IME_Placeholder\bin\Debug\KeePass.XmlSerializers.dll
+C:\Users\iuuni\Desktop\IME_Placeholder\obj\Debug\IME_Placeholder.csproj.CopyComplete
+C:\Users\iuuni\Desktop\IME_Placeholder\obj\Debug\IME_Placeholder.dll
+C:\Users\iuuni\Desktop\IME_Placeholder\obj\Debug\IME_Placeholder.pdb
