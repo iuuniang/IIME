@@ -28,7 +28,7 @@ AutoType.FilterCompilePre 下返回 `{VKEY 16}` 用来代替 `SHIFT键` 在编�
 
 考虑到也许有的朋友会使用其他输入法，切换中英文状态并不是 `SHIFT键`，因此在占位符号中添加了 **{IME:CN@X} {IME:CN@X}** 的扩展用法，**X** 的取值请参考 [Microsoft文档-Virtual-Key Codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes)，将 **Value** 转为 **十进制** 替换 **X**。暂时仅支持单键。
 
-默认状态使用 **{IME:CN} {IME:CN}** 即可，其VKEY取值为16。
+默认状态使用 **{IME:EN} {IME:CN}** 即可，其VKEY取值为16。
 
 ## 操作步骤
 - 安装插件。将下载的 `IIME.PLGX` 文件放入 **KeePass** 插件目录下。
