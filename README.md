@@ -9,6 +9,12 @@ KeePass Password Safe 2 的中文输入法切换插件
 使用 KeePass 多年，在自动输入账号密码时，经常被中文状态的输入法所困扰，经常需要手动切换为英文输入法，十分麻烦。为了解决这个问题，开发了此插件，部分代码参考了 [aardio 输入法与键盘状态检测](https://www.aardio.com/zh-cn/doc/library-guide/std/key/imeState.html) 的实现，在此特别感谢其作者 [Jacen He](https://github.com/aardio) 的开源。
 
 ## 更新日志
+
+### [1.2.0] - 2025-6-11
+- 扩展了占位符号，现在支持组合按键（最多3个功能键+1个主键，用空格进行区分）
+- 例如{IME:EN@91 32}表示 Win+空格
+- {IME:EN@91 32}{DELAY 100}{IME:EN}，理论上表示切换输入法，然后按下Shift键
+
 ### [1.1.0] - 2025-3-16
 - 懒惰了挺长一段时间，终于修复了热心朋友反馈的[触发和切换的问题](https://github.com/iuuniang/IIME/issues/4)。
 - 升级了项目目标框架，从 .NET Framework 3.5 到 .NET Framework 4.7.2。

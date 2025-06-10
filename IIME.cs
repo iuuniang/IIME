@@ -6,37 +6,36 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
-
+//.\KeePass.exe --plgx-create D:\IIME --plugx-prereq-os:Windows
 namespace IIME
 {
     public sealed class IIMEExt : Plugin
     {
+
         private const string UPDATEURL = "https://raw.githubusercontent.com/iuuniang/IIME/main/update.txt";
 
-        private const string m_strPlaceholderEnglish = "IME:EN";
-        private const string m_strPlaceholderChinese = "IME:CN";
-
         private IPluginHost m_host = null;
-
-        private bool _imeStatus = false;
-
         public override bool Initialize(IPluginHost host)
         {
+            if (host == null) return false;
             m_host = host;
-            AutoType.FilterCompilePre += this.OnAutoTypeFilterCompilePre;
-            SprEngine.FilterPlaceholderHints.Add(string.Format("{{{0}}}", m_strPlaceholderEnglish));
-            SprEngine.FilterPlaceholderHints.Add(string.Format("{{{0}}}", m_strPlaceholderChinese));
+
+            AutoType.FilterSendPre += this.OnAutoTypeFilterSendPre;
+            AutoType.SendPost += this.OnAutoTypeSendPost;
 
             return true;
         }
 
         public override void Terminate()
         {
-            SprEngine.FilterPlaceholderHints.Remove(string.Format("{{{0}}}", m_strPlaceholderEnglish));
-            SprEngine.FilterPlaceholderHints.Remove(string.Format("{{{0}}}", m_strPlaceholderChinese));
-            AutoType.FilterCompilePre -= this.OnAutoTypeFilterCompilePre;
-
+            if (m_host != null)
+            {
+                AutoType.FilterSendPre -= this.OnAutoTypeFilterSendPre;
+                AutoType.SendPost -= this.OnAutoTypeSendPost;
+                m_host = null;
+            }
         }
 
         public override string UpdateUrl
@@ -49,69 +48,20 @@ namespace IIME
             get { return (Image)KeePass.Program.Resources.GetObject("B16x16_KTouch"); }
         }
 
-        private void OnAutoTypeFilterCompilePre(object sender, AutoTypeEventArgs autoTypeEventArgs)
+        private void OnAutoTypeFilterSendPre(object sender, AutoTypeEventArgs autoTypeEventArgs)
         {
-            Regex replacerEnglish = new Regex(string.Format(@"{{{0}(?:@([\d\s]+))?}}", m_strPlaceholderEnglish), RegexOptions.IgnoreCase);
-            Regex replacerChinese = new Regex(string.Format(@"{{{0}(?:@([\d\s]+))?}}", m_strPlaceholderChinese), RegexOptions.IgnoreCase);
-
-            Func<Match, string> keyComboHandler = match =>
-            {
-                _imeStatus = InputMethodController.GetIMEStatus();
-
-                if (_imeStatus)
-                {
-                    // 如果有参数（@后面的部分）
-                    if (match.Groups[1].Success)
-                    {
-                        string[] keys = match.Groups[1].Value.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-
-                        if (keys.Length == 1)
-                        {
-                            // 单个按键：{VKEY X}
-                            return string.Format("{{VKEY {0}}}", keys[0]);
-                        }
-                        else if (keys.Length == 2)
-                        {
-                            // 双键组合：{VKEY X D}{VKEY Y}{VKEY X U}
-                            return string.Format("{{VKEY {0} D}}{{VKEY {1}}}{{VKEY {0} U}}", keys[0], keys[1]);
-                        }
-                        else if (keys.Length >= 3)
-                        {
-                            // 多键组合处理（3键或更多）
-                            StringBuilder sb = new StringBuilder();
-
-                            // 按下所有修饰键（除了最后一个）
-                            for (int i = 0; i < keys.Length - 1; i++)
-                            {
-                                sb.AppendFormat("{{VKEY {0} D}}", keys[i]);
-                            }
-
-                            // 按下并释放主键（最后一个）
-                            sb.AppendFormat("{{VKEY {0}}}", keys[keys.Length - 1]);
-
-                            // 释放所有修饰键（反向顺序）
-                            for (int i = keys.Length - 2; i >= 0; i--)
-                            {
-                                sb.AppendFormat("{{VKEY {0} U}}", keys[i]);
-                            }
-
-                            return sb.ToString();
-                        }
-                    }
-
-                    // 默认行为（无参数时使用默认值16）
-                    return string.Format("{{VKEY {0}}}", match.Groups[1].Success ? match.Groups[1].Value : "16");
-                }
-                else
-                {
-                    _imeStatus = true;
-                    return String.Empty;
-                }
-            };
-
-            autoTypeEventArgs.Sequence = replacerEnglish.Replace(autoTypeEventArgs.Sequence, match => keyComboHandler(match));
-            autoTypeEventArgs.Sequence = replacerChinese.Replace(autoTypeEventArgs.Sequence, match => keyComboHandler(match));
+            // 关闭IME（切换到英文）
+            InputMethodController.SetIMEStatus(0u);
         }
+
+        private void OnAutoTypeSendPost(object sender, AutoTypeEventArgs autoTypeEventArgs)
+        {
+            // 添加短暂延迟，确保目标应用程序已完成输入处理
+            Thread.Sleep(100);
+            InputMethodController.SetIMEStatus(1u);
+        }
+
+
 
         public static class InputMethodController
         {
@@ -124,6 +74,8 @@ namespace IIME
             private const uint IMC_SETOPENSTATUS = 0x0006;
             private const uint IME_CMODE_NOCONVERSION = 0x100;
             private const uint IME_CMODE_LANGUAGE = 0x3;
+            private const uint IME_CMODE_NATIVE = 0x1;
+            private const uint IME_CMODE_ALPHANUMERIC = 0x0;
 
             [DllImport("user32.dll", SetLastError = true)]
             private static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
@@ -163,7 +115,6 @@ namespace IIME
                 GUI_POPUPMENUMODE = 0x00000010,
                 GUI_SYSTEMMENUMODE = 0x00000008
             }
-
             [StructLayout(LayoutKind.Sequential)]
             private struct GUITHREADINFO
             {
@@ -179,34 +130,79 @@ namespace IIME
             }
             public static bool SetIMEStatus(uint status)
             {
-                return SetOpenStatus(status) == IntPtr.Zero;
-            }
+                IntPtr? result1 = SetOpenStatus(status);
+                IntPtr? result2 = SetConversionMode(status);
 
+                return (result1 != null && result1.Value != IntPtr.Zero) || (result2 != null && result2.Value != IntPtr.Zero);
+            }
             public static bool GetIMEStatus(IntPtr hWnd = default(IntPtr))
             {
                 if (hWnd == IntPtr.Zero)
                 {
                     hWnd = GetForegroundWindow();
-                    hWnd = GetFocus(hWnd,true) ?? hWnd;
+                    hWnd = GetFocus(hWnd, true) ?? hWnd;
                 }
                 bool opened = GetOpenStatus(hWnd);
                 int? convMode = GetConversionMode(hWnd);
                 ushort langId = GetCurrentLangIdByHwnd(hWnd);
 
-                if (opened && langId == 0x409) {return false;}
-                if (convMode == null) { return false;}
-                if ((convMode & IME_CMODE_NOCONVERSION) != 0 ) {return false;}
+                if (opened && langId == 0x409) { return false; }
+                if (convMode == null) { return false; }
+                if ((convMode & IME_CMODE_NOCONVERSION) != 0) { return false; }
                 return opened && ((convMode & IME_CMODE_LANGUAGE) != 0);
             }
-            private static IntPtr? SetOpenStatus(uint status,IntPtr hWnd = default(IntPtr))
+            private static IntPtr? SetOpenStatus(uint status, IntPtr hWnd = default(IntPtr))
+            {
+                if (hWnd == IntPtr.Zero)
+                {
+                    hWnd = GetForegroundWindow();
+                    // 获取实际拥有焦点的窗口
+                    IntPtr? focusWindow = GetFocus(hWnd, true);
+                    if (focusWindow != null && focusWindow.Value != IntPtr.Zero)
+                    {
+                        hWnd = focusWindow.Value;
+                    }
+                }
+                return Control(hWnd, IMC_SETOPENSTATUS, status);
+            }
+            private static bool GetOpenStatus(IntPtr hWnd)
             {
                 if (hWnd == IntPtr.Zero)
                 {
                     hWnd = GetForegroundWindow();
                 }
-                return ImeControl(hWnd, IMC_SETOPENSTATUS, status);
+                return Control(hWnd, IMC_GETOPENSTATUS) != IntPtr.Zero; //返回值 0:英文 1:中文
             }
-    
+            public static IntPtr? SetConversionMode(uint cMode, IntPtr hWnd = default(IntPtr))
+            {
+                if (hWnd == IntPtr.Zero)
+                {
+                    hWnd = GetForegroundWindow();
+                    // 获取实际拥有焦点的窗口
+                    IntPtr? focusWindow = GetFocus(hWnd, true);
+                    if (focusWindow != null && focusWindow.Value != IntPtr.Zero)
+                    {
+                        hWnd = focusWindow.Value;
+                    }
+                }
+                return Control(hWnd, IMC_SETCONVERSIONMODE, cMode);
+            }
+            private static int? GetConversionMode(IntPtr hWnd)
+            {
+                if (hWnd == IntPtr.Zero)
+                {
+                    hWnd = GetForegroundWindow();
+                }
+                IntPtr? result = Control(hWnd, IMC_GETCONVERSIONMODE);
+                if (result != null)
+                {
+                    return result.Value.ToInt32();
+                }
+                else
+                {
+                    return null;
+                }
+            }
             private static ushort GetCurrentLangIdByHwnd(IntPtr hWnd)
             {
                 if (hWnd == IntPtr.Zero)
@@ -217,35 +213,7 @@ namespace IIME
 
                 return (ushort)((uint)GetKeyboardLayout(threadId).ToInt32() & 0xFFFF);
             }
-
-            private static int? GetConversionMode(IntPtr hWnd)
-            {
-                if (hWnd == IntPtr.Zero)
-                {
-                    hWnd = GetForegroundWindow();
-                }
-                IntPtr? result = ImeControl(hWnd, IMC_GETCONVERSIONMODE);
-                if (result != null)
-                {
-                    return result.Value.ToInt32();
-                }
-                else
-                {
-                    return null;
-                }
-            }
-
-            private static bool GetOpenStatus(IntPtr hWnd)
-            {
-                if (hWnd == IntPtr.Zero)
-                {
-                    hWnd = GetForegroundWindow();
-                }
-                return ImeControl(hWnd, IMC_GETOPENSTATUS) != IntPtr.Zero; //返回值 0:英文 1:中文
-            }
-
-
-            private static IntPtr? ImeControl(IntPtr hWnd = default(IntPtr), uint command = 0,uint data = 0)
+            private static IntPtr? Control(IntPtr hWnd = default(IntPtr), uint command = 0, uint data = 0)
             {
                 if (hWnd == IntPtr.Zero)
                 {
@@ -254,12 +222,11 @@ namespace IIME
                 IntPtr hIMEWnd = ImmGetDefaultIMEWnd(hWnd);
                 if (hIMEWnd != IntPtr.Zero)
                 {
-                    return SendMessage(hIMEWnd, WM_IME_CONTROL,(IntPtr)command, (IntPtr)data);
+                    return SendMessage(hIMEWnd, WM_IME_CONTROL, (IntPtr)command, (IntPtr)data);
                 }
                 return null;
             }
-
-            private static IntPtr? GetFocus(IntPtr hWnd,bool real=false)
+            private static IntPtr? GetFocus(IntPtr hWnd, bool real = false)
             {
                 if (hWnd == IntPtr.Zero)
                 {
@@ -275,14 +242,14 @@ namespace IIME
                         return guiThreadInfo.Value.hwndCaret;
                     }
                 }
-                if (real) { return null;}
+                if (real) { return null; }
                 IntPtr leafHwnd = GetLeafWindow(hWnd);
                 return (leafHwnd == IntPtr.Zero || leafHwnd == hWnd) ? hWnd : leafHwnd;
 
             }
             private static IntPtr GetLeafWindow(IntPtr hWnd)
             {
-                if (hWnd == IntPtr.Zero) {return IntPtr.Zero;}
+                if (hWnd == IntPtr.Zero) { return IntPtr.Zero; }
                 IntPtr currentHwnd = hWnd;
                 IntPtr childHwnd;
 
@@ -292,12 +259,11 @@ namespace IIME
                 }
                 return currentHwnd;
             }
-
             private static GUITHREADINFO? GetGuiThreadInfo(IntPtr hWnd)
             {
                 if (hWnd != IntPtr.Zero)
                 {
-                    uint threadID = GetWindowThreadProcessId(hWnd,IntPtr.Zero);
+                    uint threadID = GetWindowThreadProcessId(hWnd, IntPtr.Zero);
                     GUITHREADINFO guiThreadInfo = new GUITHREADINFO();
                     guiThreadInfo.cbSize = Marshal.SizeOf(guiThreadInfo);
                     if (GetGUIThreadInfo(threadID, ref guiThreadInfo) == false)
