@@ -4,6 +4,7 @@ using KeePass.Util.Spr;
 using System;
 using System.Drawing;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.RegularExpressions;
 
 
@@ -50,41 +51,66 @@ namespace IIME
 
         private void OnAutoTypeFilterCompilePre(object sender, AutoTypeEventArgs autoTypeEventArgs)
         {
-            Regex replacerEnglish = new Regex(string.Format(@"{{{0}(?:@(\d+))?}}", m_strPlaceholderEnglish), RegexOptions.IgnoreCase);
-            Regex replacerChinese = new Regex(string.Format(@"{{{0}(?:@(\d+))?}}", m_strPlaceholderChinese), RegexOptions.IgnoreCase);
+            Regex replacerEnglish = new Regex(string.Format(@"{{{0}(?:@([\d\s]+))?}}", m_strPlaceholderEnglish), RegexOptions.IgnoreCase);
+            Regex replacerChinese = new Regex(string.Format(@"{{{0}(?:@([\d\s]+))?}}", m_strPlaceholderChinese), RegexOptions.IgnoreCase);
 
-            
-            autoTypeEventArgs.Sequence = replacerEnglish.Replace(autoTypeEventArgs.Sequence, match =>
+            Func<Match, string> keyComboHandler = match =>
             {
-                //InputMethodController.SetIMEStatus(0);
-                int vkey = match.Groups[1].Success ? int.Parse(match.Groups[1].Value) : 16;
                 _imeStatus = InputMethodController.GetIMEStatus();
+
                 if (_imeStatus)
                 {
-                    return string.Format("{{VKEY {0}}}", vkey);
+                    // 如果有参数（@后面的部分）
+                    if (match.Groups[1].Success)
+                    {
+                        string[] keys = match.Groups[1].Value.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+                        if (keys.Length == 1)
+                        {
+                            // 单个按键：{VKEY X}
+                            return string.Format("{{VKEY {0}}}", keys[0]);
+                        }
+                        else if (keys.Length == 2)
+                        {
+                            // 双键组合：{VKEY X D}{VKEY Y}{VKEY X U}
+                            return string.Format("{{VKEY {0} D}}{{VKEY {1}}}{{VKEY {0} U}}", keys[0], keys[1]);
+                        }
+                        else if (keys.Length >= 3)
+                        {
+                            // 多键组合处理（3键或更多）
+                            StringBuilder sb = new StringBuilder();
+
+                            // 按下所有修饰键（除了最后一个）
+                            for (int i = 0; i < keys.Length - 1; i++)
+                            {
+                                sb.AppendFormat("{{VKEY {0} D}}", keys[i]);
+                            }
+
+                            // 按下并释放主键（最后一个）
+                            sb.AppendFormat("{{VKEY {0}}}", keys[keys.Length - 1]);
+
+                            // 释放所有修饰键（反向顺序）
+                            for (int i = keys.Length - 2; i >= 0; i--)
+                            {
+                                sb.AppendFormat("{{VKEY {0} U}}", keys[i]);
+                            }
+
+                            return sb.ToString();
+                        }
+                    }
+
+                    // 默认行为（无参数时使用默认值16）
+                    return string.Format("{{VKEY {0}}}", match.Groups[1].Success ? match.Groups[1].Value : "16");
                 }
                 else
                 {
                     _imeStatus = true;
                     return String.Empty;
                 }
-            });
+            };
 
-            autoTypeEventArgs.Sequence = replacerChinese.Replace(autoTypeEventArgs.Sequence, match =>
-            {
-                // InputMethodController.SetIMEStatus(1);
-                int vkey = match.Groups[1].Success ? int.Parse(match.Groups[1].Value) : 16;
-                if (_imeStatus)
-                {
-                    _imeStatus = false;
-                    return string.Format("{{VKEY {0}}}", vkey);
-                }
-                else
-                {
-                    return String.Empty;
-                }
-                    
-            });
+            autoTypeEventArgs.Sequence = replacerEnglish.Replace(autoTypeEventArgs.Sequence, match => keyComboHandler(match));
+            autoTypeEventArgs.Sequence = replacerChinese.Replace(autoTypeEventArgs.Sequence, match => keyComboHandler(match));
         }
 
         public static class InputMethodController
