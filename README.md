@@ -9,6 +9,11 @@ KeePass Password Safe 2 的中文输入法切换插件
 使用 KeePass 多年，在自动输入账号密码时，经常被中文状态的输入法所困扰，经常需要手动切换为英文输入法，十分麻烦。为了解决这个问题，开发了此插件，部分代码参考了 [aardio 输入法与键盘状态检测](https://www.aardio.com/zh-cn/doc/library-guide/std/key/imeState.html) 的实现，在此特别感谢其作者 [Jacen He](https://github.com/aardio) 的开源。
 
 ## 更新日志
+### [1.3.0] - 2025-10-30
+- 重构输入法中英文状态切换逻辑。
+- 移除 `{IME:CN}` `{IME:EN}` 占位符，现在程序会自动切换了。
+- 修复了微软拼音输入法无法切回中文状态的问题。
+- 测试了小鹤音形输入法、冰凌输入法等。
 
 ### [1.2.0] - 2025-6-11
 - 扩展了占位符号，现在支持组合按键（最多3个功能键+1个主键，用空格进行区分）
@@ -29,17 +34,15 @@ KeePass Password Safe 2 的中文输入法切换插件
 
 
 ## 原理
-其实就是检测输入法状态，然后后台发送 `SHIFT键` 进行中英文切换。
-AutoType.FilterCompilePre 下返回 `{VKEY 16}` 用来代替 `SHIFT键` 在编译击键序列的时候就会按下该按键。
+阅读了一下 KeePass.Util.AutoType 的方法，发现有AutoType.FilterSendPre、AutoType.SendPost，对应的就是发送前和发送后。
+在发送前关闭中文状态、发送后打开中文就可以了。
 
-考虑到也许有的朋友会使用其他输入法，切换中英文状态并不是 `SHIFT键`，因此在占位符号中添加了 **{IME:CN@X} {IME:CN@X}** 的扩展用法，**X** 的取值请参考 [Microsoft文档-Virtual-Key Codes](https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes)，将 **Value** 转为 **十进制** 替换 **X**。暂时仅支持单键。
-
-默认状态使用 **{IME:EN} {IME:CN}** 即可，其VKEY取值为16。
 
 ## 操作步骤
 - 安装插件。将下载的 `IIME.PLGX` 文件放入 **KeePass** 插件目录下。
-- 重新启动 **KeePass**程序。
-- *编辑顶级群组—自动输入—替代默认序列为：`{DELAY 100}{CLEARFIELD}{IME:EN}{USERNAME}{TAB}{PASSWORD}{DELAY 100}{ENTER}{IME:CN}`—确定* 即可，其余的子群组都可以继承这个默认序列。
+- 重新启动 **KeePass**程序，会后台自动处理输入法状态，无需任何额外操作。
+- 使用前一版本的需要移除旧的 `{IME:CN}` `{IME:EN}`
+- *编辑顶级群组—自动输入—替代默认序列为：`{DELAY 100}{CLEARFIELD}{USERNAME}{TAB}{PASSWORD}{DELAY 100}{ENTER}`—确定* 即可，其余的子群组都可以继承这个默认序列。
 
 ## 备注
 编译PLGX的方法：```.\KeePass.exe --plgx-create D:\IIME --plugx-prereq-os:Windows```
