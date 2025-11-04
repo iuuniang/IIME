@@ -7,7 +7,9 @@ KeePass Password Safe 2 的中文输入法切换插件
 ## 说明
 
 在使用 KeePass 自动输入账号密码时，若系统处于中文输入状态，容易导致输入内容出错，此时需要手动切换为英文输入法。
+
 只需将 IIME 放入 Plugins 文件夹并重启程序，插件即会自动加载，无需额外配置。该插件能够在输入账号密码前自动切换至英文输入法，输入完成后自动切回中文，整个过程无需人工干预，有效避免因输入法状态导致的手动切换麻烦。
+
 部分代码参考了 [aardio 输入法与键盘状态检测](https://www.aardio.com/zh-cn/doc/library-guide/std/key/imeState.html) 的实现，在此特别感谢其作者 [Jacen He](https://github.com/aardio) 的开源。
 
 ## 更新日志
